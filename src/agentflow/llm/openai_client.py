@@ -2,10 +2,11 @@ from openai import OpenAI
 from agentflow.domain.implementation_plan import ImplementationPlan
 
 class Client():
-    def __init__(self, api_key:str,model:str,timeout: float = 30):
+    def __init__(self, api_key:str,model:str,format:str,timeout: float = 30):
         self.api_key = api_key
         self.client = OpenAI(api_key = api_key, timeout=timeout)
         self.model = model
+        self.format = format
 
     def response(self,user_prompt:str, system_prompt):
 
@@ -14,7 +15,7 @@ class Client():
             instructions=system_prompt,
             input=user_prompt,
             model=self.model,
-            text_format=ImplementationPlan,
+            text_format=self.format,
             )
 
 

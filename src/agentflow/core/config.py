@@ -14,6 +14,8 @@ class Setting(BaseSettings):
     OPENAI_API_KEY: str
     OPENAI_MODEL: str
     OPENAI_TIMEOUT: float = 30.0
+    GITHUB_TOKEN: str
+    BASE_URL: str
 
     model_config = SettingsConfigDict(
         env_file = ".env",
