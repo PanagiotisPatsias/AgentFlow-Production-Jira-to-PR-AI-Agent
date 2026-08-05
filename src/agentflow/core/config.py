@@ -16,6 +16,10 @@ class Setting(BaseSettings):
     OPENAI_TIMEOUT: float = 30.0
     GITHUB_TOKEN: str
     BASE_URL: str
+    DATABASE_URL: SecretStr
+    CELERY_BROKER_URL: str
+    CELERY_RESULT_BACKEND: str
+    LANGGRAPH_DATABASE_URL: SecretStr
 
     model_config = SettingsConfigDict(
         env_file = ".env",
