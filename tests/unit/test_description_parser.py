@@ -11,7 +11,10 @@ def test_description_parser():
      
     description_original, acceptance_criteria_original = parse_ticket_description(text)
     description = "Implement account lockout."
-    acceptance_criteria = """Lock after five failures.Add unit tests."""
+    acceptance_criteria = [
+        "Lock after five failures.",
+        "Add unit tests.",
+    ]
 
     assert description == description_original
     assert acceptance_criteria == acceptance_criteria_original

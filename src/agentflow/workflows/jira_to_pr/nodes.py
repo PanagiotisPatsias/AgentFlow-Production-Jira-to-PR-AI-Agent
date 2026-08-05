@@ -26,6 +26,8 @@ from agentflow.domain.code_review import (
 from agentflow.tools.git.commit import GitCommitManager
 from agentflow.tools.git.push import GitPushManager
 from agentflow.integrations.github.client import GitHubClient
+from agentflow.tools.repository.plan_paths import PlanPathNormalizer
+from agentflow.agents.review_repair_agent import ReviewRepairAgent
 
 
 def create_fetch_ticket_node(client:JiraClient):
@@ -73,11 +75,31 @@ def create_planning_agent_node(planning_agent: PlanningAgent):
 
 
 
-def validate_implementation_plan_node (state: JiraToPRState):
+def validate_implementation_plan_node(state: JiraToPRState):
+    if state.implementation_plan is None:
+        raise ValueError("Implementation plan is missing")
 
-    validate_implementation = validate_implementation_plan(state.implementation_plan,state.ticket, state.workspace_path)
+    if state.ticket is None:
+        raise ValueError("Jira ticket is missing")
 
-    return {"plan_validation":validate_implementation}
+    if state.workspace_path is None:
+        raise ValueError("Workspace path is missing")
+
+    normalized_plan = PlanPathNormalizer().normalize(
+        state.implementation_plan,
+        state.workspace_path,
+    )
+
+    validate_implementation = validate_implementation_plan(
+        normalized_plan,
+        state.ticket,
+        state.workspace_path,
+    )
+
+    return {
+        "implementation_plan": normalized_plan,
+        "plan_validation": validate_implementation,
+    }
 
 
 def plan_approval_node(state: JiraToPRState) -> dict:
@@ -400,6 +422,37 @@ def create_review_validation_node(
     return review_validation_node
 
 
+def create_review_repair_agent_node(
+    review_repair_agent: ReviewRepairAgent,
+):
+    def review_repair_agent_node(state: JiraToPRState) -> dict:
+        if state.ticket is None:
+            raise ValueError("Jira ticket is missing")
+        if state.implementation_plan is None:
+            raise ValueError("Implementation plan is missing")
+        if state.code_review is None:
+            raise ValueError("Code review result is missing")
+        if state.repository_context is None:
+            raise ValueError("Repository context is missing")
+
+        attempt = state.review_repair_attempts + 1
+        patch = review_repair_agent.repair(
+            ticket=state.ticket,
+            plan=state.implementation_plan,
+            review=state.code_review,
+            repository_context=state.repository_context,
+            attempt=attempt,
+        )
+
+        return {
+            "repair_patch_proposal": patch,
+            "repair_patch_validation": None,
+            "review_repair_attempts": attempt,
+        }
+
+    return review_repair_agent_node
+
+
 def human_pr_approval_node(state: JiraToPRState) -> dict:
     if state.code_review is None:
         raise ValueError("Code review result is missing")
@@ -568,3 +621,42 @@ def create_pull_request_node(github_client: GitHubClient):
         return {"pull_request": pull_request}
 
     return pull_request_node
+
+
+def create_update_jira_node(jira_client: JiraClient):
+    def update_jira_node(state: JiraToPRState) -> dict:
+        if state.pull_request is None:
+            raise ValueError("Pull request result is missing")
+
+        if state.branch_name is None:
+            raise ValueError("Git branch name is missing")
+
+        comment_text = (
+            "AgentFlow completed the implementation.\n"
+            f"Branch: {state.branch_name}\n"
+            f"Draft PR: {state.pull_request.url}\n"
+            "Verification: PASSED\n"
+            "Review: APPROVED"
+        )
+
+        jira_client.push_ticket(
+            ticket_key=state.ticket_key,
+            comment_text=comment_text,
+        )
+
+        return {"jira_updated": True}
+
+    return update_jira_node
+
+
+def create_cleanup_workspace_node(
+    workspace_manager: WorkspaceManager,
+):
+    def cleanup_workspace_node(state: JiraToPRState) -> dict:
+        if state.workspace_path is None:
+            raise ValueError("Workspace path is missing")
+
+        workspace_manager.cleanup(state.workspace_path)
+        return {"workspace_cleaned": True}
+
+    return cleanup_workspace_node

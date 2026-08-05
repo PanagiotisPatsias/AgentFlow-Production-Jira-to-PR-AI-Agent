@@ -53,3 +53,32 @@ class JiraClient:
 
         return ticket
 
+    def push_ticket(self, ticket_key: str, comment_text:str):
+
+        base_url = f"https://api.atlassian.com/ex/jira/{self.settings.JIRA_CLOUD_ID}"
+        url = f"{base_url}/rest/api/3/issue/{ticket_key}/comment"
+        auth = HTTPBasicAuth(self.settings.JIRA_EMAIL, self.settings.JIRA_API_TOKEN.get_secret_value())
+        headers = {"Accept": "application/json"}
+
+
+        data = {
+    "body": {
+        "type": "doc",
+        "version": 1,
+        "content": [
+            {
+                "type": "paragraph",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": comment_text,
+                    }
+                ],
+            }
+        ],
+    }
+}
+
+        response = requests.post(url, json=data,  headers=headers, auth=auth, timeout=10)
+
+        data = response.json()

@@ -11,7 +11,7 @@ from agentflow.domain.code_review import (
     ReviewValidationResult,
 )
 from agentflow.domain.pull_request import PullRequestResult
-
+import uuid
 
 class JiraToPRState(BaseModel):
     ticket_key: str
@@ -41,8 +41,13 @@ class JiraToPRState(BaseModel):
     repair_patch_validation: PatchValidationResult | None = None
     code_review: CodeReviewResult | None = None
     review_validation: ReviewValidationResult | None = None
+    review_repair_attempts: int = 0
+    max_review_repair_attempts: int = 2
     pr_approval_status: str | None = None
     pr_approval_feedback: str | None = None
     commit_sha: str | None = None
     branch_pushed: bool = False
     pull_request: PullRequestResult | None = None
+    jira_updated: bool = False
+    workspace_cleaned: bool = False
+    run_id: uuid.UUID | None = None

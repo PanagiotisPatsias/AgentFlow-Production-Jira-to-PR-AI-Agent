@@ -108,6 +108,11 @@ def route_code_review(state: JiraToPRState) -> str:
         state.code_review.decision
         == ReviewDecision.CHANGES_REQUESTED
     ):
+        if (
+            state.review_repair_attempts
+            >= state.max_review_repair_attempts
+        ):
+            return "REVIEW_REPAIR_LIMIT_REACHED"
         return "CHANGES_REQUESTED"
 
     return "REJECTED"

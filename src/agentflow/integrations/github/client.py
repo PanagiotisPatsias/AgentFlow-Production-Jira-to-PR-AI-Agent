@@ -3,7 +3,7 @@ import requests
 
 
 class GitHubClient:
-    def __init__(self, token, base_url: str, timeout: int):
+    def __init__(self, token, base_url: str, timeout: float = 30.0):
         self.token = token
 
         self.base_url = base_url
@@ -13,8 +13,10 @@ class GitHubClient:
 
         owner, project = self.parse_github_repository_url(repository_url)
 
-        # base_url = "https://api.github.com/repos/"
-        url = f"{self.base_url}/{owner}/{project}/pulls"
+        url = (
+            f"{self.base_url.rstrip('/')}"
+            f"/repos/{owner}/{project}/pulls"
+        )
 
         headers = {
             "Accept": "application/vnd.github+json",
@@ -31,9 +33,9 @@ class GitHubClient:
                         }
 
         response = requests.post(
-            url=url,
+            url,
             headers=headers,
-            body=body_request,
+            json=body_request,
             timeout= self.timeout
         )
 
