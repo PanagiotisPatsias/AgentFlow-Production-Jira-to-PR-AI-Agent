@@ -32,14 +32,8 @@ def build_repair_system_prompt() -> str:
       or mock away the required behavior.
     - Modify a test only when the test itself is demonstrably incorrect, and
       explain the reason in `notes`.
-    - Files that already exist in the current repository must be listed in
-      `modified_files`, even if the previous patch originally created them.
-    - Use `created_files` only for files that do not exist in the current
-      repository context.
-    - Every `tests_changed` item must be an exact repository-relative file
-      path, without function names, descriptions, or line numbers.
-    - Every path in `tests_changed` must also appear in either
-      `modified_files` or `created_files`.
+    - Use operation `modify` for files that currently exist and `create`
+      only for files that do not exist in the current repository context.
     - Reference only acceptance-criteria IDs defined in the Jira ticket.
     - Preserve coverage of the approved acceptance criteria.
     - Return one `file_changes` item for every changed file, containing

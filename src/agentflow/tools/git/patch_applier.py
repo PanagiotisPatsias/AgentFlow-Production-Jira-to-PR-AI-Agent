@@ -36,7 +36,11 @@ class PatchApplier:
         self._run_git_apply(
             repo_path=repo_path,
             unified_diff=unified_diff,
-            arguments=["--check", "--recount"],
+            arguments=[
+                "--check",
+                "--recount",
+                "--whitespace=error-all",
+            ],
         )
 
         # Apply the patch to the local workspace.
@@ -51,6 +55,8 @@ class PatchApplier:
             subprocess.run(
                 [
                     "git",
+                    "-c",
+                    "core.whitespace=cr-at-eol",
                     "-C",
                     str(repo_path),
                     "diff",

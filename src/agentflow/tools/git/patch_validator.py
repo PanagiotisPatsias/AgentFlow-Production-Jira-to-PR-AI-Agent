@@ -4,7 +4,7 @@ from pathlib import Path
 
 from agentflow.domain.implementation_plan import ImplementationPlan
 from agentflow.domain.jira_ticket import JiraTicket
-from agentflow.domain.patch_proposal import FileOperation, PatchProposal
+from agentflow.domain.patch_proposal import PatchProposal
 from agentflow.domain.patch_validation import (
     PatchValidationResult,
     PatchValidationStatus,
@@ -53,44 +53,17 @@ class PatchValidator:
             )
             patch.unified_diff = ""
         else:
-            structured_files = {change.path for change in patch.file_changes}
-            declared_files = set(patch.modified_files) | set(patch.created_files)
-            if structured_files != declared_files:
-                errors.append(
-                    "Structured file changes do not match declared files: "
-                    f"declared={sorted(declared_files)}, "
-                    f"structured={sorted(structured_files)}"
+            try:
+                patch.unified_diff = self._compiler.compile(
+                    workspace_path,
+                    patch,
                 )
-            if structured_files == declared_files:
-                try:
-                    patch.unified_diff = self._compiler.compile(
-                        workspace_path,
-                        patch,
-                    )
-                except (PatchCompilationError, OSError, UnicodeError) as exc:
-                    errors.append(f"Cannot compile structured patch: {exc}")
+            except (PatchCompilationError, OSError, UnicodeError) as exc:
+                errors.append(f"Cannot compile structured patch: {exc}")
 
         modified_files = set(patch.modified_files)
         created_files = set(patch.created_files)
         changed_files = modified_files | created_files
-
-        for change in patch.file_changes:
-            if (
-                change.operation == FileOperation.MODIFY
-                and change.path not in modified_files
-            ):
-                errors.append(
-                    "Structured modify operation is not declared in "
-                    f"modified_files: {change.path}"
-                )
-            if (
-                change.operation == FileOperation.CREATE
-                and change.path not in created_files
-            ):
-                errors.append(
-                    "Structured create operation is not declared in "
-                    f"created_files: {change.path}"
-                )
 
         planned_modified_files = set(plan.files_to_modify)
         planned_created_files = set(plan.files_to_create)
@@ -314,6 +287,7 @@ class PatchValidator:
                         "apply",
                         "--check",
                         "--recount",
+                        "--whitespace=error-all",
                         "-",
                     ],
                     input=patch.unified_diff,

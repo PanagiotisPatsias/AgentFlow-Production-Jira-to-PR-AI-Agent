@@ -81,7 +81,11 @@ class StructuredPatchCompiler:
                 from_file = "/dev/null"
 
             old_lines = old_content.splitlines(keepends=True)
-            new_content = change.content
+            new_content = self._normalize_new_content(
+                path=relative_path,
+                content=change.content,
+                old_content=old_content,
+            )
             if new_content and not new_content.endswith("\n"):
                 new_content += "\n"
             new_lines = new_content.splitlines(keepends=True)
@@ -105,3 +109,25 @@ class StructuredPatchCompiler:
             sections.append(header + body)
 
         return "".join(sections)
+
+    @staticmethod
+    def _normalize_new_content(
+        path: Path,
+        content: str,
+        old_content: str,
+    ) -> str:
+        normalized = content.replace("\r\n", "\n").replace("\r", "\n")
+
+        # Trailing spaces in Python source are never required and cause
+        # `git diff --check` to reject the generated change.
+        if path.suffix == ".py":
+            normalized = "\n".join(
+                line.rstrip(" \t") for line in normalized.split("\n")
+            )
+
+        # Avoid rewriting every line merely because the repository stores
+        # an existing file with CRLF line endings.
+        if "\r\n" in old_content:
+            normalized = normalized.replace("\n", "\r\n")
+
+        return normalized

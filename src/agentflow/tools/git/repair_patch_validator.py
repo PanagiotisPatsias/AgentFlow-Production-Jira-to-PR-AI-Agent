@@ -53,24 +53,15 @@ class RepairPatchValidator:
             )
             patch.unified_diff = ""
         else:
-            structured_files = {change.path for change in patch.file_changes}
-            declared_files = set(patch.modified_files) | set(patch.created_files)
-            if structured_files != declared_files:
-                errors.append(
-                    "Structured repair changes do not match declared files: "
-                    f"declared={sorted(declared_files)}, "
-                    f"structured={sorted(structured_files)}"
+            try:
+                patch.unified_diff = self._compiler.compile(
+                    workspace_path,
+                    patch,
                 )
-            if structured_files == declared_files:
-                try:
-                    patch.unified_diff = self._compiler.compile(
-                        workspace_path,
-                        patch,
-                    )
-                except (PatchCompilationError, OSError, UnicodeError) as exc:
-                    errors.append(
-                        f"Cannot compile structured repair patch: {exc}"
-                    )
+            except (PatchCompilationError, OSError, UnicodeError) as exc:
+                errors.append(
+                    f"Cannot compile structured repair patch: {exc}"
+                )
 
         modified_files = set(patch.modified_files)
         created_files = set(patch.created_files)
@@ -273,6 +264,7 @@ class RepairPatchValidator:
                         "apply",
                         "--check",
                         "--recount",
+                        "--whitespace=error-all",
                         "-",
                     ],
                     input=patch.unified_diff,
