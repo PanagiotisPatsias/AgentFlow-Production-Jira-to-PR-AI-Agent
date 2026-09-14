@@ -2,6 +2,10 @@ from agentflow.domain.pull_request import PullRequestResult
 import requests
 
 
+class GitHubPullRequestError(RuntimeError):
+    """Raised when GitHub does not create the requested pull request."""
+
+
 class GitHubClient:
     def __init__(self, token, base_url: str, timeout: float = 30.0):
         self.token = token
@@ -39,19 +43,28 @@ class GitHubClient:
             timeout= self.timeout
         )
 
-        data = response.json()
+        try:
+            data = response.json()
+        except requests.exceptions.JSONDecodeError as exc:
+            raise GitHubPullRequestError(
+                "GitHub returned a non-JSON response while creating the "
+                f"pull request. Status: {response.status_code}"
+            ) from exc
 
-        if response.status_code == 403:
-            raise ValueError
-
-        elif response.status_code == 422:
-            raise ValueError
+        if response.status_code != 201:
+            message = data.get("message", "Unknown GitHub API error")
+            errors = data.get("errors")
+            detail = f" Details: {errors}" if errors else ""
+            raise GitHubPullRequestError(
+                "GitHub pull request creation failed with status "
+                f"{response.status_code}: {message}.{detail}"
+            )
 
         return PullRequestResult(
-            number = data["number"] ,
-            url = data["html_url"],
-            title = data["title"],
-            draft = data["draft"],
+            number=data["number"],
+            url=data["html_url"],
+            title=data["title"],
+            draft=data["draft"],
 
         )
 

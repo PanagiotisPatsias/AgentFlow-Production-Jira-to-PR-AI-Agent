@@ -54,7 +54,16 @@ class GitCommitManager:
             repo_path,
             ["add", "--", *sorted(changed_files)],
         )
-        self._run_git(repo_path, ["diff", "--cached", "--check"])
+        self._run_git(
+            repo_path,
+            [
+                "-c",
+                "core.whitespace=cr-at-eol",
+                "diff",
+                "--cached",
+                "--check",
+            ],
+        )
 
         normalized_message = " ".join(commit_message.split())[:120]
 

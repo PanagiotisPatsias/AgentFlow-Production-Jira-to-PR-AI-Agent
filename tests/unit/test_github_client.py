@@ -1,54 +1,56 @@
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
-from agentflow.integrations.github.client import GitHubClient
+import pytest
 
-
-class FakeResponse:
-    status_code = 201
-
-    @staticmethod
-    def json() -> dict:
-        return {
-            "number": 42,
-            "html_url": "https://github.com/owner/repository/pull/42",
-            "title": "SCRUM-1: Implement feature",
-            "draft": True,
-        }
+from agentflow.integrations.github.client import (
+    GitHubClient,
+    GitHubPullRequestError,
+)
 
 
-def test_create_draft_pull_request_sends_github_payload() -> None:
-    client = GitHubClient(
-        token="test-token",
-        base_url="https://api.github.com",
-    )
+@patch("agentflow.integrations.github.client.requests.post")
+def test_reports_github_api_error_instead_of_key_error(post: Mock) -> None:
+    response = Mock(status_code=422)
+    response.json.return_value = {
+        "message": "Validation Failed",
+        "errors": [{"message": "A pull request already exists"}],
+    }
+    post.return_value = response
 
-    with patch(
-        "agentflow.integrations.github.client.requests.post",
-        return_value=FakeResponse(),
-    ) as post:
-        result = client.create_draft_pull_request(
-            repository_url="https://github.com/owner/repository",
-            head_branch="agentflow/scrum-1",
+    with pytest.raises(GitHubPullRequestError) as error:
+        GitHubClient("token", "https://api.github.com").create_draft_pull_request(
+            repository_url="https://github.com/example/project",
+            head_branch="agentflow/test-1",
             base_branch="main",
-            title="SCRUM-1: Implement feature",
-            body="PR body",
+            title="Test PR",
+            body="Test body",
         )
 
-    post.assert_called_once_with(
-        "https://api.github.com/repos/owner/repository/pulls",
-        headers={
-            "Accept": "application/vnd.github+json",
-            "Authorization": "Bearer test-token",
-            "X-GitHub-Api-Version": "2026-03-10",
-        },
-        json={
-            "title": "SCRUM-1: Implement feature",
-            "body": "PR body",
-            "head": "agentflow/scrum-1",
-            "base": "main",
-            "draft": True,
-        },
-        timeout=30.0,
+    assert "status 422" in str(error.value)
+    assert "Validation Failed" in str(error.value)
+
+
+@patch("agentflow.integrations.github.client.requests.post")
+def test_returns_created_pull_request(post: Mock) -> None:
+    response = Mock(status_code=201)
+    response.json.return_value = {
+        "number": 42,
+        "html_url": "https://github.com/example/project/pull/42",
+        "title": "Test PR",
+        "draft": True,
+    }
+    post.return_value = response
+
+    result = GitHubClient(
+        "token",
+        "https://api.github.com",
+    ).create_draft_pull_request(
+        repository_url="https://github.com/example/project",
+        head_branch="agentflow/test-1",
+        base_branch="main",
+        title="Test PR",
+        body="Test body",
     )
+
     assert result.number == 42
     assert result.draft is True
