@@ -4,7 +4,10 @@ from pathlib import Path
 
 from agentflow.domain.implementation_plan import ImplementationPlan
 from agentflow.domain.jira_ticket import JiraTicket
-from agentflow.domain.patch_proposal import PatchProposal
+from agentflow.domain.patch_proposal import (
+    FileOperation,
+    PatchProposal,
+)
 from agentflow.domain.patch_validation import (
     PatchValidationResult,
     PatchValidationStatus,
@@ -20,6 +23,32 @@ class RepairPatchValidator:
 
     def __init__(self) -> None:
         self._compiler = StructuredPatchCompiler()
+
+    @staticmethod
+    def _normalize_repair_operations(
+        patch: PatchProposal,
+        plan: ImplementationPlan,
+        repo_path: Path,
+    ) -> PatchProposal:
+        """Treat initially-created files as existing during repair."""
+        initially_created = set(plan.files_to_create)
+        normalized_changes = []
+
+        for change in patch.file_changes:
+            candidate = repo_path / change.path
+            if (
+                change.operation == FileOperation.CREATE
+                and change.path in initially_created
+                and candidate.is_file()
+            ):
+                change = change.model_copy(
+                    update={"operation": FileOperation.MODIFY}
+                )
+            normalized_changes.append(change)
+
+        return patch.model_copy(
+            update={"file_changes": normalized_changes}
+        )
 
     def validate(
         self,
@@ -42,6 +71,13 @@ class RepairPatchValidator:
             raise ValueError(
                 f"Workspace is not a Git repository: {workspace_path}"
             )
+
+        normalized_patch = self._normalize_repair_operations(
+            patch=patch,
+            plan=plan,
+            repo_path=repo_path,
+        )
+        patch.file_changes = normalized_patch.file_changes
 
         if not patch.summary.strip():
             errors.append("Repair patch summary is missing")

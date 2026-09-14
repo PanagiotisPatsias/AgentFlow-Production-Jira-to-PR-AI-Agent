@@ -65,6 +65,28 @@ def create_repository_context_builder(repo_context_builder:RepositoryContextBuil
     return repository_context_builder
 
 
+def create_review_repair_context_builder(
+    repo_context_builder: RepositoryContextBuilder,
+):
+    def review_repair_context_builder(state: JiraToPRState) -> dict:
+        if state.workspace_path is None:
+            raise ValueError("Workspace has not been prepared")
+        if state.implementation_plan is None:
+            raise ValueError("Implementation plan is missing")
+
+        approved_files = [
+            *state.implementation_plan.files_to_modify,
+            *state.implementation_plan.files_to_create,
+        ]
+        repository_context = repo_context_builder.build_repair_context(
+            state.workspace_path,
+            approved_files,
+        )
+        return {"repository_context": repository_context}
+
+    return review_repair_context_builder
+
+
 def create_planning_agent_node(planning_agent: PlanningAgent):
     def planning_agent_node(state:JiraToPRState):
 
@@ -162,6 +184,7 @@ def create_create_branch_node(git_branch_manager: GitBranchManager):
 
 def create_implementation_agent_node(
     implementation_agent: ImplementationAgent,
+    context_builder: RepositoryContextBuilder,
 ):
     def implementation_agent_node(
         state: JiraToPRState,
@@ -172,8 +195,13 @@ def create_implementation_agent_node(
         if state.implementation_plan is None:
             raise ValueError("Implementation plan is missing")
 
-        if state.repository_context is None:
-            raise ValueError("Repository context is missing")
+        if state.workspace_path is None:
+            raise ValueError("Workspace path is missing")
+
+        implementation_context = context_builder.build_targeted(
+            state.workspace_path,
+            state.implementation_plan.files_to_modify,
+        )
 
         current_attempt = state.patch_generation_attempts + 1
         validation_errors = None
@@ -183,7 +211,7 @@ def create_implementation_agent_node(
         patch_proposal = implementation_agent.implementation(
             state.ticket,
             state.implementation_plan,
-            state.repository_context,
+            implementation_context,
             validation_errors=validation_errors,
             attempt=current_attempt,
         )

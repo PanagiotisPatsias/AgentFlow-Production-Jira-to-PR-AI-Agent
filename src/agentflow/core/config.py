@@ -14,6 +14,7 @@ class Setting(BaseSettings):
     OPENAI_API_KEY: str
     OPENAI_MODEL: str
     OPENAI_TIMEOUT: float = 30.0
+    OPENAI_IMPLEMENTATION_TIMEOUT: float = 180.0
     GITHUB_TOKEN: str
     BASE_URL: str
     DATABASE_URL: SecretStr

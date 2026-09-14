@@ -34,6 +34,10 @@ def build_review_system_prompt() -> str:
     - Do not invent files, functions, test results, or executed commands.
     - Review the current repository state, not only the proposed patch.
     - Use exact repository-relative paths in finding.file_path.
+    - Preserve every path component shown in the repository context. Never
+      treat a nested application directory as the repository root. For
+      example, use `Intellishore/app.py`, not `app.py`, when that is the path
+      shown in the context.
     - Cover every Jira acceptance criterion in
       acceptance_criteria_covered after evaluating it.
     - Do not approve when a HIGH or CRITICAL finding remains.

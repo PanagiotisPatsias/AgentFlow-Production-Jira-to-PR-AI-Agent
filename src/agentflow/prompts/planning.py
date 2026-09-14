@@ -12,6 +12,13 @@ def build_system_prompt() -> str:
 
     For every PlanStep:
     - `files` must contain exact repository-relative file paths.
+    - The repository root is the root of the supplied repository context.
+      Preserve every path component shown in each `## File:` heading.
+    - Never treat a nested application directory as the repository root.
+      For example, if the context contains
+      `Intellishore/pyproject.toml`, use
+      `Intellishore/tests/test_example.py`, not
+      `tests/test_example.py`.
     - Do not use directory paths.
     - Every path in `PlanStep.files` must also appear in either
       `files_to_modify` or `files_to_create`.

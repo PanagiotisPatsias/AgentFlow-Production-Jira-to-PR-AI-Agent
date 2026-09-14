@@ -74,6 +74,39 @@ def validate_implementation_plan(
     modify_files = set(plan.files_to_modify)
     create_files = set(plan.files_to_create)
 
+    # When modified files belong to a nested Python project, new files must
+    # keep that project's repository-relative prefix. This prevents a planner
+    # from treating a nested application directory as the repository root.
+    project_roots: set[Path] = set()
+    for file_path in modify_files:
+        candidate = resolve_plan_path(file_path)
+        if candidate is None or not candidate.is_file():
+            continue
+
+        for parent in (candidate.parent, *candidate.parents):
+            if parent == repo_path:
+                break
+            if (parent / "pyproject.toml").is_file():
+                project_roots.add(parent)
+                break
+
+    if len(project_roots) == 1:
+        project_root = next(iter(project_roots))
+        project_prefix = project_root.relative_to(repo_path)
+
+        for file_path in create_files:
+            path = Path(file_path)
+            if path.is_absolute() or ".." in path.parts:
+                continue
+
+            try:
+                path.relative_to(project_prefix)
+            except ValueError:
+                errors.append(
+                    "File to create must keep the nested project prefix "
+                    f"'{project_prefix.as_posix()}/': {file_path}"
+                )
+
     # A file cannot be both modified and created
     duplicated_files = modify_files & create_files
 

@@ -11,6 +11,23 @@ from agentflow.domain.jira_ticket import JiraTicket
 
 
 class ReviewValidator:
+    @staticmethod
+    def _resolve_existing_path(path: Path, repo_path: Path) -> Path | None:
+        direct_candidate = repo_path / path
+        if direct_candidate.is_file():
+            return direct_candidate
+
+        candidates = [
+            candidate
+            for candidate in repo_path.rglob(path.name)
+            if candidate.is_file()
+            and tuple(
+                candidate.relative_to(repo_path).parts[-len(path.parts):]
+            ) == path.parts
+        ]
+
+        return candidates[0] if len(candidates) == 1 else None
+
     def validate(
         self,
         review: CodeReviewResult,
@@ -82,7 +99,16 @@ class ReviewValidator:
                     )
                     continue
 
-                candidate = (repo_path / path).resolve()
+                candidate = self._resolve_existing_path(path, repo_path)
+
+                if candidate is None:
+                    errors.append(
+                        "Review finding references a file that does not "
+                        f"exist or is ambiguous: {finding.file_path}"
+                    )
+                    continue
+
+                candidate = candidate.resolve()
 
                 try:
                     candidate.relative_to(repo_path)
@@ -93,11 +119,7 @@ class ReviewValidator:
                     )
                     continue
 
-                if not candidate.is_file():
-                    errors.append(
-                        "Review finding references a file that does not "
-                        f"exist: {finding.file_path}"
-                    )
+                finding.file_path = candidate.relative_to(repo_path).as_posix()
 
         if review.decision == ReviewDecision.APPROVED and any(
             finding.severity in blocking_severities

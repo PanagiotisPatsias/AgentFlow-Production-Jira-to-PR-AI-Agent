@@ -13,6 +13,10 @@ def build_review_repair_system_prompt() -> str:
 
     Rules:
     - Treat the current repository context as the source of truth.
+    - The context may include both the current complete file and its original
+      Git HEAD version. Use the original version only to restore behavior that
+      the implementation accidentally removed; preserve the required new
+      ticket changes from the current version.
     - Change only files allowed by the approved plan.
     - Address every HIGH and MEDIUM review finding.
     - Do not weaken, remove, skip, or bypass tests.
