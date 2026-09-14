@@ -2,6 +2,10 @@ from celery import Celery
 
 from agentflow.core.config import Setting
 
+from celery.signals import setup_logging
+
+from agentflow.observability.logging import configure_logging
+
 setting = Setting()
 
 celery_app = Celery(
@@ -23,3 +27,7 @@ celery_app.conf.update(
     enable_utc=True,
     broker_connection_retry_on_startup=True, # Redis has a delay, worker tries again.
 )
+
+@setup_logging.connect
+def configure_worker_logging(**kwargs) -> None:
+    configure_logging(service="celery-worker")

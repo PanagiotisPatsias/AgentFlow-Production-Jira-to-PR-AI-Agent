@@ -35,5 +35,66 @@ services:
     ports:
       - "6379:6379"
 
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - loki
+
+  loki:
+    image: grafana/loki:3.7.0
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./infra/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki_data:/loki
+    command:
+      - "-config.file=/etc/loki/loki-config.yml"
+
+  alloy:
+    image: grafana/alloy:latest
+    restart: unless-stopped
+    ports:
+      - "12345:12345"
+    volumes:
+      - ./infra/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - ./logs:/var/log/agentflow:ro
+      - alloy_data:/var/lib/alloy/data
+    command:
+      - "run"
+      - "--server.http.listen-addr=0.0.0.0:12345"
+      - "--storage.path=/var/lib/alloy/data"
+      - "/etc/alloy/config.alloy"
+    depends_on:
+      - loki
+
 volumes:
   postgres_data:
+  prometheus_data:
+  grafana_data:
+  loki_data:
+  alloy_data:

@@ -1,0 +1,50 @@
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+loki.source.file "agentflow" {
+  targets = [
+    {
+      __path__ = "/var/log/agentflow/*.jsonl",
+      job      = "agentflow",
+    },
+  ]
+  forward_to   = [loki.process.agentflow.receiver]
+  tail_from_end = false
+
+  file_match {
+    enabled     = true
+    sync_period = "5s"
+  }
+}
+
+loki.process "agentflow" {
+  stage.json {
+    expressions = {
+      timestamp = "timestamp",
+      level     = "level",
+      service   = "service",
+    }
+  }
+
+  stage.timestamp {
+    source = "timestamp"
+    format = "RFC3339Nano"
+  }
+
+  stage.labels {
+    values = {
+      level   = "",
+      service = "",
+    }
+  }
+
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
