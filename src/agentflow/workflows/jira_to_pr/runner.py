@@ -3,11 +3,35 @@ from agentflow.database.repositories.workflow_run_repository import WorkflowRunR
 from agentflow.database.session import SessionLocal
 from agentflow.database.enums import WorkflowRunStatus
 from langgraph.types import Command
+from psycopg_pool import PoolTimeout
 
 class JiraPRWorkflowRunner:
 
     def __init__(self, graph):
         self.graph = graph
+
+    @staticmethod
+    def _terminal_outcome(state: dict) -> tuple[WorkflowRunStatus, str]:
+        if (
+            state.get("pull_request") is not None
+            and state.get("jira_updated") is True
+            and state.get("workspace_cleaned") is True
+        ):
+            return WorkflowRunStatus.COMPLETED, "END"
+
+        if state.get("plan_approval_status") == "reject":
+            return WorkflowRunStatus.REJECTED, "PLAN_REJECTED"
+
+        if state.get("pr_approval_status") == "reject":
+            return WorkflowRunStatus.REJECTED, "PR_REJECTED"
+
+        if (
+            state.get("patch_generation_attempts", 0)
+            >= state.get("max_patch_generation_attempts", 3)
+        ):
+            return WorkflowRunStatus.FAILED, "PATCH_RETRY_LIMIT_REACHED"
+
+        return WorkflowRunStatus.FAILED, "INCOMPLETE_WORKFLOW"
 
     def start(self, run_id:str, ticket_key: str, repository_url:str, base_branch:str, celery_task_id: str | None = None) -> dict:
 
@@ -37,7 +61,6 @@ class JiraPRWorkflowRunner:
                 initial_input,
                 config = config
             )
-
             interrupts = current_state.get("__interrupt__",[])
 
             if interrupts:
@@ -70,6 +93,7 @@ class JiraPRWorkflowRunner:
                                         status="WAITING_FOR_APPROVAL",
                                         details={"approval_type": approval_type},
                                         )
+
                 return {
                     "run_id": run_id,
                     "status": WorkflowRunStatus.WAITING_FOR_APPROVAL.value,
@@ -83,16 +107,25 @@ class JiraPRWorkflowRunner:
 
 
             else:
+                terminal_status, terminal_stage = self._terminal_outcome(
+                    current_state
+                )
                 with SessionLocal() as session:
                     repository = WorkflowRunRepository(session)
                     repository.update_status(
                         run_id=workflow_run_id,
-                        status=WorkflowRunStatus.COMPLETED,
-                        current_stage="END",
+                        status=terminal_status,
+                        current_stage=terminal_stage,
+                        error_message=(
+                            None
+                            if terminal_status == WorkflowRunStatus.COMPLETED
+                            else terminal_stage
+                        ),
                                 )
                 return {
                             "run_id": run_id,
-                            "status": WorkflowRunStatus.COMPLETED.value,
+                            "status": terminal_status.value,
+                            "terminal_reason": terminal_stage,
                         }
 
 
@@ -100,11 +133,26 @@ class JiraPRWorkflowRunner:
             with SessionLocal() as session:
                 repository = WorkflowRunRepository(session)
                 failed_run = repository.get_run(workflow_run_id)
+                is_checkpoint_failure = isinstance(exc, PoolTimeout)
                 failed_stage = (
-                    failed_run.current_stage
-                    if failed_run is not None
-                    else "graph_execution"
+                    "checkpoint_persistence"
+                    if is_checkpoint_failure
+                    else (
+                        failed_run.current_stage
+                        if failed_run is not None
+                        else "graph_execution"
+                    )
                 )
+                if is_checkpoint_failure:
+                    repository.add_event(
+                        run_id=workflow_run_id,
+                        node_name="graph_checkpoint",
+                        status="FAILED",
+                        details={
+                            "exception_type": type(exc).__name__,
+                        },
+                        error_message=str(exc),
+                    )
                 repository.update_status(
                     run_id=workflow_run_id,
                     status=WorkflowRunStatus.FAILED,
@@ -112,13 +160,6 @@ class JiraPRWorkflowRunner:
                     error_message=str(exc),
                 )
             raise
-
-
-
-
-
-
-
     def resume(self, run_id: str, decision: str, feedback: str) -> dict:
         workflow_run_id = UUID(run_id)
 
@@ -149,7 +190,6 @@ class JiraPRWorkflowRunner:
                 "human_pr_approval_node": "pull_request_approval",
             }
             approval_type = approval_types.get(approval_node_name)
-
             if approval_type is None:
                 raise ValueError(
                     f"Unknown approval stage: {approval_node_name}"
@@ -183,7 +223,6 @@ class JiraPRWorkflowRunner:
                 "thread_id": str(workflow_run_id),
             }
         }
-
         try:
             current_state = self.graph.invoke(
                 Command(
@@ -226,7 +265,6 @@ class JiraPRWorkflowRunner:
                             "approval_type": next_approval_type,
                         },
                     )
-
                 return {
                     "run_id": run_id,
                     "status": WorkflowRunStatus.WAITING_FOR_APPROVAL.value,
@@ -238,42 +276,48 @@ class JiraPRWorkflowRunner:
                     ),
                 }
 
-            terminal_status = (
-                WorkflowRunStatus.REJECTED
-                if decision == "reject"
-                else WorkflowRunStatus.COMPLETED
+            terminal_status, terminal_stage = self._terminal_outcome(
+                current_state
             )
-            terminal_stage = (
-                "REJECTED"
-                if terminal_status == WorkflowRunStatus.REJECTED
-                else "END"
-            )
-
             with SessionLocal() as session:
                 repository = WorkflowRunRepository(session)
                 repository.update_status(
                     run_id=workflow_run_id,
                     status=terminal_status,
                     current_stage=terminal_stage,
+                    error_message=(
+                        None
+                        if terminal_status == WorkflowRunStatus.COMPLETED
+                        else terminal_stage
+                    ),
                 )
-
             return {
                 "run_id": run_id,
                 "status": terminal_status.value,
+                "terminal_reason": terminal_stage,
             }
 
         except Exception as exc:
             with SessionLocal() as session:
                 repository = WorkflowRunRepository(session)
                 failed_run = repository.get_run(workflow_run_id)
+                is_checkpoint_failure = isinstance(exc, PoolTimeout)
                 failed_stage = (
-                    failed_run.current_stage
-                    if failed_run is not None
-                    else "graph_execution"
+                    "checkpoint_persistence"
+                    if is_checkpoint_failure
+                    else (
+                        failed_run.current_stage
+                        if failed_run is not None
+                        else "graph_execution"
+                    )
                 )
                 repository.add_event(
                     run_id=workflow_run_id,
-                    node_name="workflow_resume",
+                    node_name=(
+                        "graph_checkpoint"
+                        if is_checkpoint_failure
+                        else "workflow_resume"
+                    ),
                     status="FAILED",
                     details={
                         "exception_type": type(exc).__name__,
@@ -287,5 +331,3 @@ class JiraPRWorkflowRunner:
                     error_message=str(exc),
                 )
             raise
-
-

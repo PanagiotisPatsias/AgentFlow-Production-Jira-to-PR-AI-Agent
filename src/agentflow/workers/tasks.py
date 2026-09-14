@@ -1,9 +1,38 @@
+from celery.signals import worker_process_shutdown, worker_shutdown
+
 from agentflow.workers.celery_app import celery_app
-from agentflow.workflows.jira_to_pr.graph import graph
+from agentflow.workflows.jira_to_pr.graph import create_compiled_graph
 from agentflow.workflows.jira_to_pr.runner import JiraPRWorkflowRunner
 
 
-workflow_runner = JiraPRWorkflowRunner(graph)
+_workflow_runner: JiraPRWorkflowRunner | None = None
+_checkpoint_pool = None
+
+
+def _get_workflow_runner() -> JiraPRWorkflowRunner:
+    """Initialize graph and checkpoint pool lazily in the Celery worker."""
+    global _workflow_runner, _checkpoint_pool
+
+    if _workflow_runner is None:
+        compiled_graph, checkpoint_pool = create_compiled_graph()
+        _checkpoint_pool = checkpoint_pool
+        _workflow_runner = JiraPRWorkflowRunner(compiled_graph)
+
+    return _workflow_runner
+
+
+def _close_checkpoint_pool(**kwargs) -> None:
+    global _workflow_runner, _checkpoint_pool
+
+    if _checkpoint_pool is not None and not _checkpoint_pool.closed:
+        _checkpoint_pool.close()
+
+    _checkpoint_pool = None
+    _workflow_runner = None
+
+
+worker_process_shutdown.connect(_close_checkpoint_pool)
+worker_shutdown.connect(_close_checkpoint_pool)
 
 
 @celery_app.task(name="agentflow.health_check")
@@ -25,7 +54,7 @@ def run_jira_to_pr_workflow(
     repository_url: str,
     base_branch: str = "main",
 ) -> dict:
-    return workflow_runner.start(
+    return _get_workflow_runner().start(
         run_id=run_id,
         ticket_key=ticket_key,
         repository_url=repository_url,
@@ -40,7 +69,7 @@ def resume_jira_to_pr_workflow(
     decision: str,
     feedback: str = "",
 ) -> dict:
-    return workflow_runner.resume(
+    return _get_workflow_runner().resume(
         run_id=run_id,
         decision=decision,
         feedback=feedback,

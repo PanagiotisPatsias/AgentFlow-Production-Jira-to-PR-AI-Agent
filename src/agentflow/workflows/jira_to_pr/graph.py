@@ -5,7 +5,7 @@ from agentflow.integrations.jira.client import JiraClient
 from agentflow.core.config import Setting
 from agentflow.workflows.jira_to_pr.routes import route_validation,route_plan_validation, route_plan_approval, route_implementation_approval,route_verification, route_repair_patch_validation, route_code_review, route_pr_approval
 from agentflow.tools.repository.workspace import WorkspaceManager
-from agentflow.workflows.jira_to_pr.nodes import create_prepare_workspace_node,create_patch_validation_node,create_patch_applier_node, create_verification_runner_node,create_repair_agent_node, create_repair_patch_validation_node, create_repair_patch_applier_node, create_review_agent_node, create_review_validation_node, create_review_repair_agent_node, human_pr_approval_node, create_commit_changes_node, create_push_branch_node, create_pull_request_node, create_update_jira_node, create_cleanup_workspace_node
+from agentflow.workflows.jira_to_pr.nodes import create_prepare_workspace_node,create_patch_validation_node,create_patch_applier_node, create_verification_runner_node,create_repair_agent_node, create_repair_patch_validation_node, create_repair_patch_applier_node, create_review_agent_node, create_review_validation_node, create_review_repair_agent_node, create_review_repair_context_builder, human_pr_approval_node, create_commit_changes_node, create_push_branch_node, create_pull_request_node, create_update_jira_node, create_cleanup_workspace_node
 from agentflow.workflows.jira_to_pr.nodes import create_repository_context_builder, create_planning_agent_node,validate_implementation_plan_node, create_create_branch_node,create_implementation_agent_node
 from agentflow.tools.repository.context import RepositoryContextBuilder
 from agentflow.agents.planning_agent import PlanningAgent
@@ -43,21 +43,37 @@ workspace_manager = WorkspaceManager()
 prepare_workspace_node = create_prepare_workspace_node(workspace_manager)
 repo_context = RepositoryContextBuilder()
 repository_context_builder = create_repository_context_builder(repo_context)
+review_repair_context_builder = create_review_repair_context_builder(
+    repo_context
+)
 planning_client = Client(setting.OPENAI_API_KEY,setting.OPENAI_MODEL, format = ImplementationPlan, timeout=setting.OPENAI_TIMEOUT)
 planning_agent = PlanningAgent(planning_client)
 planning_agent_node = create_planning_agent_node(planning_agent)
 branch_manager = GitBranchManager()
 create_branch_node = create_create_branch_node(branch_manager)
-client_implementation =  Client(setting.OPENAI_API_KEY,setting.OPENAI_MODEL, format = PatchProposal, timeout=setting.OPENAI_TIMEOUT)
+client_implementation = Client(
+    setting.OPENAI_API_KEY,
+    setting.OPENAI_MODEL,
+    format=PatchProposal,
+    timeout=setting.OPENAI_IMPLEMENTATION_TIMEOUT,
+)
 implementation_agent = ImplementationAgent(client_implementation)
 patch_validator = PatchValidator()
-implementation_agent_node = create_implementation_agent_node(implementation_agent)
+implementation_agent_node = create_implementation_agent_node(
+    implementation_agent,
+    repo_context,
+)
 patch_validation_node = create_patch_validation_node(patch_validator)
 patch_applier = PatchApplier()
 patch_applier_node = create_patch_applier_node(patch_applier)
 runner = VerificationRunner()
 verification_runner_node = create_verification_runner_node(runner)
-client_repair = Client(setting.OPENAI_API_KEY,setting.OPENAI_MODEL, format = PatchProposal, timeout=setting.OPENAI_TIMEOUT)
+client_repair = Client(
+    setting.OPENAI_API_KEY,
+    setting.OPENAI_MODEL,
+    format=PatchProposal,
+    timeout=setting.OPENAI_IMPLEMENTATION_TIMEOUT,
+)
 repair = RepairAgent(client_repair)
 repair_agent_node = create_repair_agent_node(repair)
 repair_patch_validator = RepairPatchValidator()
@@ -68,7 +84,12 @@ review_agent = ReviewAgent(review_client)
 review_agent_node = create_review_agent_node(review_agent)
 review_validator = ReviewValidator()
 review_validation_node = create_review_validation_node(review_validator)
-review_repair_client = Client(setting.OPENAI_API_KEY, setting.OPENAI_MODEL, format=PatchProposal,timeout=setting.OPENAI_TIMEOUT)
+review_repair_client = Client(
+    setting.OPENAI_API_KEY,
+    setting.OPENAI_MODEL,
+    format=PatchProposal,
+    timeout=setting.OPENAI_IMPLEMENTATION_TIMEOUT,
+)
 review_repair_agent = ReviewRepairAgent(review_repair_client)
 review_repair_agent_node = create_review_repair_agent_node(review_repair_agent)
 commit_manager = GitCommitManager()
@@ -178,7 +199,7 @@ graph.add_node(
     "refresh_repository_context_for_review_repair",
     create_tracked_node(
         "refresh_repository_context_for_review_repair",
-        repository_context_builder,
+        review_repair_context_builder,
     ),
 )
 graph.add_node(
@@ -324,6 +345,15 @@ graph.add_edge("create_pull_request_node", "update_jira_node")
 graph.add_edge("update_jira_node", "cleanup_workspace_node")
 graph.add_edge("cleanup_workspace_node", END)
 
-checkpointer, checkpoint_pool = create_postgres_checkpointer(setting.LANGGRAPH_DATABASE_URL.get_secret_value())
+def create_compiled_graph():
+    """Create runtime graph resources inside the process that uses them.
 
-graph = graph.compile(checkpointer=checkpointer)
+    Celery uses prefork workers by default. Creating a PostgreSQL connection
+    pool while this module is imported would make child processes inherit a
+    pool created by the parent process, which is not process-safe.
+    """
+    checkpointer, checkpoint_pool = create_postgres_checkpointer(
+        setting.LANGGRAPH_DATABASE_URL.get_secret_value()
+    )
+    compiled_graph = graph.compile(checkpointer=checkpointer)
+    return compiled_graph, checkpoint_pool

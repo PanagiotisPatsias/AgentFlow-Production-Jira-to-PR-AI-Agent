@@ -9,12 +9,17 @@ def create_postgres_checkpointer(
 
     pool = ConnectionPool(
         conninfo=database_url,
+        min_size=1,
+        max_size=5,
+        timeout=30,
+        open=True,
         kwargs={
             "autocommit": True,
             "prepare_threshold": 0,
             "row_factory": dict_row,
         },
     )
+    pool.wait(timeout=30)
 
     checkpointer = PostgresSaver(pool)
 

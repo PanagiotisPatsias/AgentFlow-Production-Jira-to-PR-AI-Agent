@@ -1,5 +1,5 @@
 from agentflow.database.repositories.workflow_run_repository import WorkflowRunRepository
-from agentflow.workers.tasks import run_jira_to_pr_workflow, resume_jira_to_pr_workflow
+from agentflow.workers.celery_app import celery_app
 from agentflow.database.enums import WorkflowRunStatus
 from agentflow.database.session import SessionLocal
 from kombu.exceptions import OperationalError
@@ -27,11 +27,14 @@ class WorkflowService:
             workflow_run_id = workflow_run.id
 
         try:
-            result = run_jira_to_pr_workflow.delay(
-                workflow_id,
-                ticket_key,
-                repository_url,
-                base_branch,
+            result = celery_app.send_task(
+                "agentflow.run_jira_to_pr_workflow",
+                kwargs={
+                    "run_id": workflow_id,
+                    "ticket_key": ticket_key,
+                    "repository_url": repository_url,
+                    "base_branch": base_branch,
+                },
             )
         except OperationalError as exc:
             with SessionLocal() as session:
@@ -60,35 +63,47 @@ class WorkflowService:
 
 
     def submit_approval(self, run_id:str, decision:str, feedback:str) -> dict:
+        workflow_run_id = UUID(run_id)
+
         with SessionLocal()  as session:
             repository = WorkflowRunRepository(session)
 
-            workflow = repository.get_run(UUID(run_id))
+            workflow = repository.get_run(workflow_run_id)
 
             if workflow is None:
                 raise WorkflowNotFoundError(
                     f"Workflow run was not found: {run_id}"
                 )
 
-            if workflow.status == WorkflowRunStatus.WAITING_FOR_APPROVAL.value:
-                try:
-                    result = resume_jira_to_pr_workflow.delay(
-                        run_id,
-                        decision,
-                        feedback,
-                    )
-                except OperationalError as exc:
-                    raise WorkflowDispatchError(
-                        "Approval could not be queued because Celery is unavailable"
-                    ) from exc
-
-                return {
-                            "run_id": run_id,
-                            "celery_task_id": result.id,
-                            "status": "APPROVAL_QUEUED",
-                        }
-            else:
+            if workflow.status != WorkflowRunStatus.WAITING_FOR_APPROVAL.value:
                 raise WorkflowStateConflictError("Workflow is not waiting for approval")
+
+        try:
+            result = celery_app.send_task(
+                "agentflow.resume_jira_to_pr_workflow",
+                kwargs={
+                    "run_id": run_id,
+                    "decision": decision,
+                    "feedback": feedback,
+                },
+            )
+        except OperationalError as exc:
+            raise WorkflowDispatchError(
+                "Approval could not be queued because Celery is unavailable"
+            ) from exc
+
+        with SessionLocal() as session:
+            repository = WorkflowRunRepository(session)
+            repository.set_celery_task_id(
+                workflow_run_id,
+                result.id,
+            )
+
+        return {
+            "run_id": run_id,
+            "celery_task_id": result.id,
+            "status": "APPROVAL_QUEUED",
+        }
     
 
 
