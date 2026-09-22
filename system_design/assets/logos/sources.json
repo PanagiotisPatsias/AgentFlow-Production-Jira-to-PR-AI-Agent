@@ -1,0 +1,103 @@
+[
+  {
+    "file": "nextjs.svg",
+    "brand": "Next.js",
+    "collection": "Simple Icons 16.0.0",
+    "source": "https://vercel.com/design/brands#next-js",
+    "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.0.0/icons/nextdotjs.svg",
+    "guidelines": "https://vercel.com/design/brands#next-js"
+  },
+  {
+    "file": "fastapi.svg",
+    "brand": "FastAPI",
+    "collection": "Simple Icons 16.0.0",
+    "source": "https://github.com/tiangolo/fastapi/blob/ffb4f77a11f83132b521ba0aac6c95792c19e797/docs/en/docs/img/icon-white.svg",
+    "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.0.0/icons/fastapi.svg"
+  },
+  {
+    "file": "kong.svg",
+    "brand": "Kong",
+    "collection": "Simple Icons 16.0.0",
+    "source": "https://konghq.com/brand-assets/",
+    "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.0.0/icons/kong.svg",
+    "guidelines": "https://konghq.com/brand/"
+  },
+  {
+    "file": "celery.svg",
+    "brand": "Celery",
+    "collection": "Simple Icons 16.0.0",
+    "source": "https://github.com/celery/celery/blob/4d77ddddb10797011dc10dd2e4e1e7a7467b8431/docs/images/favicon.ico",
+    "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.0.0/icons/celery.svg"
+  },
+  {
+    "file": "langgraph.svg",
+    "brand": "LangGraph",
+    "collection": "Simple Icons 16.0.0",
+    "source": "https://www.langchain.com/langgraph",
+    "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.0.0/icons/langgraph.svg"
+  },
+  {
+    "file": "github.svg",
+    "brand": "GitHub",
+    "collection": "Simple Icons 16.0.0",
+    "source": "https://github.com/logos",
+    "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.0.0/icons/github.svg",
+    "guidelines": "https://github.com/logos"
+  },
+  {
+    "file": "docker.svg",
+    "brand": "Docker",
+    "collection": "Simple Icons 16.0.0",
+    "source": "https://www.docker.com/company/newsroom/media-resources",
+    "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.0.0/icons/docker.svg"
+  },
+  {
+    "file": "prometheus.svg",
+    "brand": "Prometheus",
+    "collection": "Simple Icons 16.0.0",
+    "source": "https://prometheus.io",
+    "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.0.0/icons/prometheus.svg"
+  },
+  {
+    "file": "mcp.svg",
+    "brand": "Model Context Protocol",
+    "collection": "Simple Icons 16.0.0",
+    "source": "https://github.com/modelcontextprotocol/docs/blob/573dc60c2e7aab2605b29d0bf27194aa7b02e4fb/logo/light.svg",
+    "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.0.0/icons/modelcontextprotocol.svg"
+  },
+  {
+    "file": "grafana.svg",
+    "brand": "Grafana",
+    "download": "https://raw.githubusercontent.com/grafana/grafana/main/public/img/grafana_icon.svg"
+  },
+  {
+    "file": "loki.svg",
+    "brand": "Grafana Loki",
+    "download": "https://grafana.com/static/img/logos/logo-loki.svg"
+  },
+  {
+    "file": "alloy.svg",
+    "brand": "Grafana Alloy",
+    "download": "https://grafana.com/media/oss/alloy/alloy-logo.svg"
+  },
+  {
+    "file": "openai.svg",
+    "brand": "OpenAI",
+    "download": "https://cdn.jsdelivr.net/npm/simple-icons@14.15.0/icons/openai.svg"
+  },
+  {
+    "file": "postgresql.svg",
+    "brand": "PostgreSQL",
+    "download": "https://raw.githubusercontent.com/devicons/devicon/v2.16.0/icons/postgresql/postgresql-original.svg"
+  },
+  {
+    "file": "redis.svg",
+    "brand": "Redis",
+    "download": "https://raw.githubusercontent.com/devicons/devicon/v2.16.0/icons/redis/redis-original.svg"
+  },
+  {
+    "file": "jira.svg",
+    "brand": "Jira",
+    "download": "https://raw.githubusercontent.com/devicons/devicon/v2.16.0/icons/jira/jira-original.svg"
+  }
+]
